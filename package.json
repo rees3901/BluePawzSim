@@ -1,0 +1,12 @@
+{
+  "name": "bluepawz-sim",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hardware-free sandbox that simulates the BluePawz collar↔base LoRa protocol and command lifecycle.",
+  "bin": { "bluepawz-sim": "run.js" },
+  "scripts": {
+    "test": "node run.js",
+    "list": "node run.js --list"
+  },
+  "engines": { "node": ">=14" }
+}
