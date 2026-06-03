@@ -15,9 +15,8 @@
 // has a revert-to-default bug, THIS test fails — unlike the JS model, which
 // kept the name in RAM forever and could never catch it.
 //
-// Build (see run.ps1):
-//   g++ -std=c++17 -I ../../BluePawzTransmitter/src -I mocks \
-//       test_name_persist.cpp ../../BluePawzTransmitter/src/name_store.cpp -o test_name_persist
+// Build it with native/run.ps1 (which compiles this with the real
+// ../../BluePawzTransmitter/src/name_store.cpp and runs it).
 // ─────────────────────────────────────────────────────────────────────────
 #include "name_store.h"
 #include "mock_nvs.h"

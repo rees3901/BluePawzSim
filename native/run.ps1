@@ -7,6 +7,8 @@ function Find-Gpp {
   $c = Get-Command g++ -ErrorAction SilentlyContinue
   if ($c) { return $c.Source }
   foreach ($p in @(
+      "C:\ProgramData\mingw64\mingw64\bin\g++.exe",   # choco 'mingw' package
+      "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin\g++.exe",
       "$env:USERPROFILE\winlibs\mingw64\bin\g++.exe",
       "$env:USERPROFILE\mingw64\bin\g++.exe",
       "$env:USERPROFILE\mingw32\bin\g++.exe",
@@ -22,6 +24,9 @@ if (-not $gpp) {
   Write-Host "No native g++ found. See native/README.md for how to install one (no admin needed)."
   exit 2
 }
+# g++ needs its own bin dir on PATH to find cc1plus/as/ld — otherwise it
+# exits non-zero with NO diagnostics. Prepend it for this process.
+$env:PATH = (Split-Path $gpp) + [IO.Path]::PathSeparator + $env:PATH
 Write-Host "Using compiler: $gpp`n"
 
 $TX = (Resolve-Path "..\..\BluePawzTransmitter\src").Path
