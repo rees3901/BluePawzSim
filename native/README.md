@@ -50,7 +50,22 @@ can't run on the PC. You need a host `g++`. Pick one:
 | Test | Compiles (real firmware source) | Proves |
 |---|---|---|
 | `test_name_persist.cpp` | `BluePawzTransmitter/src/name_store.cpp` | bug #8 — the user-set name survives deep-sleep resets and is never reverted to the default; invalid renames are rejected without clobbering the stored name |
+| `test_collar_cmd.cpp` | `BluePawzTransmitter/src/cmd_inbound.cpp` + `name_store.cpp` | the collar's inbound-command path — JSON parse, immutable-UID targeting (for-me / not-for-me / broadcast / missing), command dispatch (ping / set_name / OTHER), rename apply + **persistence across deep-sleep**, ACK build, and **msg_id echo** (the field the receiver pairs ACKs on). The firmware's `handleModeCommand` delegates these paths to this same `cmd_inbound.cpp`, so the test exercises the exact flashed code. |
 
-More cores (receiver command lifecycle, collar command handling, full
-round-trip) are being extracted behind `IRadio`/`IClock` and will be added as
-`command_core` / `collar_core` tests here.
+`test_collar_cmd` needs ArduinoJson; `run.ps1` finds it inside the firmware's
+`.pio/libdeps` automatically and skips the test (with a note) if no firmware
+checkout has been built yet.
+
+### What this rules out for the rename / "hangs on waiting" bug
+
+`test_collar_cmd` exercises every collar-side step a base-station command goes
+through **except** the two that are inherently hardware/RTOS-coupled and can't
+run off-device: the SX1262 RX interrupt + `readData()` actually firing, and the
+deep-sleep/awake-window timing that decides whether the collar is *listening*
+when the base transmits. Since the logic path is proven correct here, a
+real-world failure points at those two — diagnose them with the collar's serial
+log (`[RX] Command received …`) and the post-TX RX-window timing, not the
+parse/target/apply/ACK code.
+
+The receiver command lifecycle + full RX↔TX round-trip remain to be extracted
+behind `IRadio`/`IClock`.
