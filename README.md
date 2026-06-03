@@ -75,6 +75,7 @@ for real into the collar's RX window (**AWAITING_ACK**, counted toward
 | `dead-collar-age-backstop` | a never-waking collar → FAILED by the 30-min backstop |
 | `cancel-before-delivery` | a queued command can be cancelled before it's delivered |
 | `packet-loss-redelivers-next-wake` | lossy link → redelivered across wakes → eventually delivered |
+| `lost-rename-ack-recovered-by-telemetry` | every rename ACK dropped → still `delivered` via the collar's next telemetry name-match (V3.6.6) |
 
 ## Findings (bugs/limitations the sim surfaced)
 
@@ -83,8 +84,14 @@ for real into the collar's RX window (**AWAITING_ACK**, counted toward
   received" — it keeps retrying. For idempotent commands (rename, mode) the
   retries simply re-apply the same value, so it's harmless; the base may still
   show `awaiting_ack`/`failed` while the collar is, in fact, already updated.
-  A future "the collar already has this value, here's a fresh ACK" path could
-  close that gap. The sim demonstrates this at high loss rates.
+  The sim demonstrates this at high loss rates.
+  - **Closed for renames (V3.6.6).** The receiver now treats a collar's later
+    telemetry reporting the *requested* name as implicit delivery confirmation
+    (`confirmRenameByTelemetry` in the firmware; mirrored in `lib/base.js`).
+    Scenario `lost-rename-ack-recovered-by-telemetry` proves a rename still
+    resolves to `delivered` with **every** `set_name` ACK dropped — recovered
+    purely by the name-match, no ACK and zero awake re-sends. The same pattern
+    could later be extended to `mode` (telemetry already carries `mode`).
 
 ## ⚠ Keeping it honest (drift)
 

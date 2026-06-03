@@ -187,10 +187,9 @@ const SCENARIOS = [
   scenario("packet-loss-redelivers-next-wake", (t, v) => {
     // 35% per-packet loss: the first wake's command and/or ACK is often lost;
     // the base keeps retrying on each subsequent wake until the round-trip
-    // (telemetry → command → ACK) all gets through. (NB: the sim also shows a
-    // real limitation — if only the ACK is lost the collar has already applied
-    // the change but the base keeps retrying; harmless for idempotent commands
-    // like rename/mode. See README "Findings".)
+    // (telemetry → command → ACK) all gets through. (The old "lost ACK leaves
+    // it retrying forever" limitation is now closed for renames — see
+    // scenario 12 and README "Findings".)
     const s = makeSim({ verbose: v, channelOpts: { lossRate: 0.35, seed: 7 } });
     const collar = s.addCollar({ deviceId: 430, name: "Podge", mode: "lost" }); // 30s sleep = frequent retries
     let cmd;
@@ -202,6 +201,33 @@ const SCENARIOS = [
     t.eq("eventually delivered despite 60% loss", cmd.status, "delivered");
     t.eq("collar got the rename", collar.nvs.name, "Lucky");
     t.check("required at least one wake-delivery attempt", cmd.wakeAttempts >= 1);
+  }),
+
+  // 12 ──────────────────────────────────────────────────────────────────
+  scenario("lost-rename-ack-recovered-by-telemetry", (t, v) => {
+    // V3.6.6 lost-ACK resilience. The collar RECEIVES + APPLIES the rename and
+    // sends its ACK, but EVERY set_name ACK is dropped in flight. Pre-fix the
+    // command hangs at AWAITING_ACK/QUEUED until the 30-min age backstop and
+    // then FAILS — even though the rename actually succeeded. The fix: the
+    // collar's next telemetry reports the new name, which the base treats as
+    // implicit delivery confirmation. Since ACKs are dropped for the whole run,
+    // the ONLY way this can reach DELIVERED is the telemetry name-match.
+    let dropAcks = true;
+    const s = makeSim({ verbose: v, channelOpts: {
+      dropFilter: (senderId, obj) => dropAcks && /^collar:/.test(senderId) && obj && obj.ack === "set_name",
+    }});
+    const collar = s.addCollar({ deviceId: 430, name: "Podge", mode: "lost" }); // 30s sleep → next wake soon
+    let cmd, pending;
+    s.clock.at(2000, () => { cmd = s.base.sendRename(430, "Gizmo"); }); // collar in its RX window
+    s.clock.at(6000, () => { pending = cmd.status; }); // ACK already dropped → not delivered yet
+    s.clock.run(120000);
+    t.eq("collar applied the rename", collar.nvs.name, "Gizmo");
+    t.check("still pending right after the dropped ACK",
+      ["queued", "sending", "awaiting_ack"].includes(pending));
+    t.eq("recovered to DELIVERED via telemetry name-match", cmd.status, "delivered");
+    t.check("delivered without any ACK (pure telemetry confirm)", cmd.wakeAttempts === 0);
+    t.check("resolved well before the 30-min backstop", cmd.statusChangedMs - cmd.timestamp < 60000);
+    t.eq("GUI shows delivered", s.gui.statusOf(cmd.msgId), "delivered");
   }),
 ];
 
